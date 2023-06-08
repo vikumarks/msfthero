@@ -34,4 +34,7 @@ and saved separately.</li>
 <ol>card address, slot#, port#</ol></li>
 <li>Change the save rxf path inside hero_helper/hero_helper.py line 21
 <ol>change to desired location: save_rxf_path = "C:\\automation\\"</ol></li>
+<li>To change scale of test edit hero_scale/variables.py line 10
+<ol><li>ENI_COUNT = 64 # 64</li>
+<li>By default setup for 64 ENIs change to: 8, 32, 48, 64</li></ol>
 </ol>
