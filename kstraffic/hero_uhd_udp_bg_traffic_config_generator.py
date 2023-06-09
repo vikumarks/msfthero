@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import ipaddress
 import json
 import macaddress
@@ -8,7 +9,7 @@ from munch import DefaultMunch
 from datetime import datetime
 from ixnetwork_restpy import SessionAssistant, BatchUpdate
 
-sys.path.append(r"C:\Work\dpugen\dpugen")                       #Put path to a dflt_params file from which dash or sai config was genrated.
+sys.path.append(r"/home/mircea/dpugen/dpugen")                       #Put path to a dflt_params file from which dash or sai config was genrated.
 from dflt_params import dflt_params as df
 
 
@@ -142,7 +143,7 @@ test_data = {
                     },
         "rangesd": {
                     "ip":  {
-                            "start_value":str(ipa(cp.IP_R_START + cp.IP_STEP_ENI) +1),
+                            "start_value":str(ipa(cp.IP_R_START + cp.IP_STEP_ENI) -1),
                             "step_value":"1.0.0.0",  #p.IP_STEP_ENI, 
                             "increments":[(p.IP_STEP_ENI, 3,[(p.IP_STEP_NSG,10,[])])],                          # 1-A 10 is ranges ip Step  and ACL_NSG_COUNT =3 or 5 6 or 10 in all direction
                             "ng_step":(1,"4.0.0.0")
@@ -303,7 +304,7 @@ def hero_ixnetwork_config():
         endpoints_deny.append(
                             (
                             deepcopy([{"arg1": ng_local.href,"arg2": select_port,    "arg3": 1,    "arg4": reset_ip_count+1,    "arg5": 1  }]),
-                            deepcopy([{"arg1": ng_deny.href ,"arg2": select_port,    "arg3": 1,    "arg4": reset_ip_count*step_ip_d+1,    "arg5": step_ip_d  }])
+                            deepcopy([{"arg1": ng_deny.href ,"arg2": select_port,    "arg3": 1,    "arg4": reset_ip_count*step_ip_d-1,    "arg5": step_ip_d  }])
                             )
                           )
         reset_ip_count+=1
