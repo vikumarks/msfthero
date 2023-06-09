@@ -185,7 +185,7 @@ def hero_ixnetwork_config():
                 ce.TransmissionControl.Type = 'continuous'
                 ce.FrameRateDistribution.PortDistribution = 'splitRateEvenly'
                 ce.FrameSize.FixedSize = 440
-                ce.FrameRate.update(Type='percentLineRate', Rate=1)
+                ce.FrameRate.update(Type='percentLineRate', Rate=0.5)
                 inner_udp = ce.Stack.read(ipv4_template.AppendProtocol(udp_template))
                 inn_sp = inner_udp.Field.find(DisplayName='^UDP-Source-Port')
                 inn_dp = inner_udp.Field.find(DisplayName='^UDP-Dest-Port')
