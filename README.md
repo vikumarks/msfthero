@@ -3,15 +3,25 @@ Hero Test Keysight Traffic Config's
 <Contents>
 
 - [msfthero](#msfthero)
-  - [Use Cases](#use-cases)
+- [msfthero](#msfthero-1)
   - [Command-line](#command-line)
+    - [UDP BG Traffic Config](#udp-bg-traffic-config)
 - [Instructions](#instructions)
+    - [stateful traffic gen](#stateful-traffic-gen)
 # msfthero
 
 `msfthero` is set of python script to genrate Keysight Traffic config for Hero Test. Its purpose is to generate Keysight traffic stateless and state-full traffic .
 
 ## Command-line
-`python msfthero\kstraffichero_uhd_udp_bg_traffic_config_generator.py` can be used to generate UDP background traffic for MSFT Hero Test. 
+
+### UDP BG Traffic Config
+
+```Shell
+cd /home/mircea
+python ./msfthero/kstraffic/hero_uhd_udp_bg_traffic_config_generator.py
+
+```
+
 
 `stateful traffic gen` requires pytest.  To run change directory to stateful_traffic_gen and from there: 
 <br> pytest -s hero_scale/test_hero.py
