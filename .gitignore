@@ -1,0 +1,8 @@
+.DS_STORE
+.idea
+*.bkp
+*.log
+*.pcap
+__pycache__/
+.pytest_cache/
+*.pyc
