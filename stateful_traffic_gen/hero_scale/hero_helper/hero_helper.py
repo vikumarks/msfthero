@@ -41,7 +41,7 @@ class HeroHelper:
         'userObjectiveType_cps': "connectionRate",
         'userObjectiveType_tcp_bg': "concurrentConnections",
         'initial_objective': 15000000,
-        'initial_objective_tcp_bg': 4000000,
+        'initial_objective_tcp_bg': 15000000,
         'threshold': 100000,
         'target_failures': 1000,
         'MAX_CPS': 32000000,
@@ -347,9 +347,9 @@ class HeroHelper:
 
         if slot_total == 4:
             self.user_init_obj = 3600000
-            self.user_init_obj_tcp_bg = 1000000
+            #self.user_init_obj_tcp_bg = 1000000
             self.url_patch_dict['initial_objective'] = self.user_init_obj
-            self.url_patch_dict['initial_objective_tcp_bg'] = self.user_init_obj_tcp_bg
+            #self.url_patch_dict['initial_objective_tcp_bg'] = self.user_init_obj_tcp_bg
             self.enis = ENI_COUNT
             self.nsgs = self.enis * self.ip_ranges_per_vpc
 
@@ -903,7 +903,10 @@ class HeroHelper:
         server_ip_range_settings = []
         server_mac_range_settings = []
         server_vlan_range_settings = []
-        bg_net_split = int(enis * self.tcp_bg_adjust_percentage)
+        if enis == 2:
+            bg_net_split = 1
+        else:
+            bg_net_split = int(enis * self.tcp_bg_adjust_percentage)
 
         if self.split_networks is True and self.test_config_type == 'cps':
             eni = 1
