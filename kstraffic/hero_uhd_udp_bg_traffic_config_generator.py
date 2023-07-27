@@ -7,9 +7,9 @@ import sys
 from copy import deepcopy
 from munch import DefaultMunch
 from datetime import datetime
-from ixnetwork_restpy import SessionAssistant, BatchUpdate
+from ixnetwork_restpy import SessionAssistant, BatchUpdate, BatchAdd
 
-sys.path.append(r"/home/mircea/dpugen/dpugen")                       #Put path to a dflt_params file from which dash or sai config was generated.
+sys.path.append(r"/home/mircea/dpugen/dpugen")                       #Put path to a dflt_params file from which dash or sai config was genrated.
 from dflt_params import dflt_params as df
 
 
@@ -26,6 +26,14 @@ for mac in ['MAC_L_START','MAC_R_START','ACL_NSG_MAC_STEP','ACL_POLICY_MAC_STEP'
     cp[mac] = int(maca(df[mac]))
 cp = DefaultMunch.fromDict(cp)
 
+# *****************************Frame Per Sec **************************************************************
+pps                             = 15000000
+number_of_enis_for_udb_traffic  = 16 * 2                 #Multiply by 2 coz of inbund and outbound traffic 
+number_of_ranges_per_eni        = 10
+ip_address_count_4_ranges       = int(pps/(number_of_enis_for_udb_traffic*number_of_ranges_per_eni))
+framesPerSecond                 = number_of_ranges_per_eni * int(ip_address_count_4_ranges + ip_address_count_4_ranges * 0.06667)/5            #6.6667%    (totalnumber_of_flows + 6.6667% of totalnumber_of_flows) / 5
+
+# *********************************************************************************************************
 
 TESTBED = {
     'stateless': [
@@ -122,8 +130,8 @@ test_data = {
                             "increments":[(p.IP_STEP_ENI, 3,[(p.IP_STEP_NSG,10,[])])],                          # 1-A 10 is ranges ip Step  and ACL_NSG_COUNT =3 or 5 6 or 10 in all direction
                             "ng_step":(1,"4.0.0.0")
                             },
-                    "ip_address_count_4_ranges": 64000,
-                    "multiplier": 10,                                                                           # 1- 10 is ranges ip Step Number should match with 1-A
+                    "ip_address_count_4_ranges": ip_address_count_4_ranges,
+                    "multiplier": number_of_ranges_per_eni,                                                                           # 1- 10 is ranges ip Step Number should match with 1-A
                     "prefix":32,
                     'prefixaddrstep':2
                     },
@@ -135,7 +143,7 @@ test_data = {
                             "ng_step":(1,"4.0.0.0")
                             },
                     "ip_address_count_4_ranges": 128,
-                    "multiplier": 10,                                                                           # 1- 10 is ranges ip Step Number should match with 1-A
+                    "multiplier": number_of_ranges_per_eni,                                                                           # 1- 10 is ranges ip Step Number should match with 1-A
                     "prefix":32,
                     'prefixaddrstep':2
                     },
@@ -159,9 +167,10 @@ def hero_ixnetwork_config():
         print ("Creating %s Traffic" % name)
         print ("*"*5,datetime.now(),"*"*5)
         print ("Creating EP for Each ENI")
-        for indx,srcdst in enumerate(endpoints):
-            src,dst = srcdst
-            trafficItem.EndpointSet.add(Name="ENI-%s" % str(indx+1),ScalableSources=src, ScalableDestinations=dst)
+        with BatchAdd(ixnetwork):
+            for indx,srcdst in enumerate(endpoints):
+                src,dst = srcdst
+                trafficItem.EndpointSet.add(Name="ENI-%s" % str(indx+1),ScalableSources=src, ScalableDestinations=dst)
 
         config_elements_sets = trafficItem.ConfigElement.find()
         print ("*"*5,datetime.now(),"*"*5)
@@ -170,8 +179,9 @@ def hero_ixnetwork_config():
                 ipv4_template = ce.Stack.find(TemplateName="ipv4-template.xml")[-1]
                 ce.TransmissionControl.Type = 'continuous'
                 ce.FrameRateDistribution.PortDistribution = 'splitRateEvenly'
+                ce.FrameRateDistribution.StreamDistribution = 'splitRateEvenly'
                 ce.FrameSize.FixedSize = 440
-                ce.FrameRate.update(Type='percentLineRate', Rate=0.5)
+                ce.FrameRate.update(Type='framesPerSecond', Rate=framesPerSecond)
                 inner_udp = ce.Stack.read(ipv4_template.AppendProtocol(udp_template))
                 inn_sp = inner_udp.Field.find(DisplayName='^UDP-Source-Port')
                 inn_dp = inner_udp.Field.find(DisplayName='^UDP-Dest-Port')
@@ -211,7 +221,7 @@ def hero_ixnetwork_config():
         # Was Using #p.ENI_COUNT*2)/len(vports) for multiplier
 
         obj_map[ed]["bgp"]   = ixnetwork.Topology.add(Ports=vports[:4] if ed=="enis" else vports[4:], Name="TG_%s" % ed)\
-                                        .DeviceGroup.add(Name="%s" % ed.upper(), Multiplier=12)\
+                                        .DeviceGroup.add(Name="%s" % ed.upper(), Multiplier=4)\
                                         .Ethernet.add(UseVlans=True).Ipv4.add().BgpIpv4Peer.add()
 
         obj_map[ed]["ipv4"]             = obj_map[ed]["bgp"].parent
@@ -269,27 +279,27 @@ def hero_ixnetwork_config():
     step_ip_d = td['clients']["rangesd"]["multiplier"]
     select_port = 0
     reset_ip_count = 0
-    for eni in range(48):               # p.ENI_COUNT               Need to change when ixnwork is using 48 as 16 is used by ixload
-        if eni%12==0:                   # Was using int((p.ENI_COUNT*2)/len(vports))
+    for eni in range(16):               # p.ENI_COUNT               Need to change when ixnwork is using 48 as 16 is used by ixload
+        if eni%4==0:                   # Was using int((p.ENI_COUNT*2)/len(vports))
                 select_port+=1
                 reset_ip_count = 0
 
         endpoints_allow_outbound.append(
                             (
-                            deepcopy([{"arg1": eni_ips.href,"arg2": select_port,"arg3": 1,"arg4": reset_ip_count+1,"arg5": 1  }]),
-                            deepcopy([{"arg1": ng_allow.href,"arg2": select_port,"arg3": 1,"arg4": reset_ip_count*step_ip_a+1,"arg5": step_ip_a  }])
+                            deepcopy([{"arg1": eni_ips,"arg2": select_port,"arg3": 1,"arg4": reset_ip_count+1,"arg5": 1  }]),
+                            deepcopy([{"arg1": ng_allow,"arg2": select_port,"arg3": 1,"arg4": reset_ip_count*step_ip_a+1,"arg5": step_ip_a  }])
                             )
                           )
         endpoints_allow_inbound.append(
                             (
-                            deepcopy([{"arg1": ng_allow.href,"arg2": select_port,"arg3": 1,"arg4": reset_ip_count*step_ip_a+1,"arg5": step_ip_a  }]),
-                            deepcopy([{"arg1": eni_ips.href,"arg2": select_port,"arg3": 1,"arg4": reset_ip_count+1,"arg5": 1  }])
+                            deepcopy([{"arg1": ng_allow,"arg2": select_port,"arg3": 1,"arg4": reset_ip_count*step_ip_a+1,"arg5": step_ip_a  }]),
+                            deepcopy([{"arg1": eni_ips,"arg2": select_port,"arg3": 1,"arg4": reset_ip_count+1,"arg5": 1  }])
                             )
                           )
         endpoints_deny.append(
                             (
-                            deepcopy([{"arg1": eni_ips.href,"arg2": select_port,    "arg3": 1,    "arg4": reset_ip_count+1,    "arg5": 1  }]),
-                            deepcopy([{"arg1": ng_deny.href ,"arg2": select_port,    "arg3": 1,    "arg4": reset_ip_count*step_ip_d-1,    "arg5": step_ip_d  }])
+                            deepcopy([{"arg1": eni_ips,"arg2": select_port,    "arg3": 1,    "arg4": reset_ip_count+1,    "arg5": 1  }]),
+                            deepcopy([{"arg1": ng_deny ,"arg2": select_port,    "arg3": 1,    "arg4": reset_ip_count*step_ip_d-1,    "arg5": step_ip_d  }])
                             )
                           )
         reset_ip_count+=1
