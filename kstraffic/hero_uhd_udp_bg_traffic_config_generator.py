@@ -9,7 +9,7 @@ from munch import DefaultMunch
 from datetime import datetime
 from ixnetwork_restpy import SessionAssistant, BatchUpdate
 
-sys.path.append(r"/home/mircea/dpugen/dpugen")                       #Put path to a dflt_params file from which dash or sai config was genrated.
+sys.path.append(r"/home/mircea/dpugen/dpugen")                       #Put path to a dflt_params file from which dash or sai config was generated.
 from dflt_params import dflt_params as df
 
 
@@ -81,20 +81,6 @@ test_data = {
                     "mac": "08:C0:EB:20:38:2C",                                                                 #DPU MAC
                     "prefix":32
                     },
-        "rangesa": {
-                        "ip":  {
-                                "start_value":str(ipa(cp.IP_L_START + cp.IP_STEP_ENI)), 
-                                "step_value":"1.0.0.0",  #p.IP_STEP_ENI, 
-                                "increments":[(p.IP_STEP_ENI, 3,[])],                                           # p.ACL_NSG_COUNT +-*?  insted of 3?
-                                "ng_step":(1,"4.0.0.0")
-                                },
-                        "ip_address_count_4_ranges": 1,
-                        "multiplier": 1,
-                        "prefix":32,
-                        'prefixaddrstep':1
-
-                        },
-
         },
     "clients": {
         "eth": {
@@ -164,7 +150,7 @@ ixnetwork=None
 def hero_ixnetwork_config():
     global ixnetwork
     testbed = TESTBED
-    def createTI(name, endpoints):
+    def createTI(name, endpoints, udp_src_port=10000,udp_dst_port=10000):
         trafficItem = ixnetwork.Traffic.TrafficItem.find(Name="^%s$" % name)
         if len(trafficItem) == 0:
             trafficItem = ixnetwork.Traffic.TrafficItem.add(Name=name, TrafficType='ipv4', BiDirectional=False)  # BiDirectional=True
@@ -191,8 +177,8 @@ def hero_ixnetwork_config():
                 inn_dp = inner_udp.Field.find(DisplayName='^UDP-Dest-Port')
                 inn_sp.Auto = False
                 inn_dp.Auto = False
-                inn_sp.SingleValue = 10000
-                inn_dp.SingleValue = 10000
+                inn_sp.SingleValue = udp_src_port
+                inn_dp.SingleValue = udp_dst_port
 
 
         trafficItem.Tracking.find()[0].TrackBy = ['trackingenabled0', 'sourceDestEndpointPair0','vlanVlanId0']
@@ -233,13 +219,13 @@ def hero_ixnetwork_config():
         obj_map[ed]["bgp"].Active.Single(False)
         obj_map[ed]["ipv4"].Prefix.Single(val["ipv4"]["prefix"])
 
-        ng    = ixnetwork.Topology.find().DeviceGroup.find(Name=ed.upper()).NetworkGroup.add(Name="Local", Multiplier=val["rangesa"]["multiplier"])
-        obj_map[ed]["rangesa"] = ng.Ipv4PrefixPools.add(NumberOfAddresses=val["rangesa"]["ip_address_count_4_ranges"])
-        obj_map[ed]["rangesa"].PrefixLength.Single(val["rangesa"]["prefix"])
-        obj_map[ed]["rangesa"].PrefixAddrStep.Single(val["rangesa"]["prefixaddrstep"])
 
         if ed=="clients":
-            ng.Name = "Allow"
+            ng    = ixnetwork.Topology.find().DeviceGroup.find(Name=ed.upper()).NetworkGroup.add(Name="Allow", Multiplier=val["rangesa"]["multiplier"])
+            obj_map[ed]["rangesa"] = ng.Ipv4PrefixPools.add(NumberOfAddresses=val["rangesa"]["ip_address_count_4_ranges"])
+            obj_map[ed]["rangesa"].PrefixLength.Single(val["rangesa"]["prefix"])
+            obj_map[ed]["rangesa"].PrefixAddrStep.Single(val["rangesa"]["prefixaddrstep"])
+
             d_ng    = ixnetwork.Topology.find().DeviceGroup.find(Name=ed.upper()).NetworkGroup.add(Name="Deny", Multiplier=val["rangesd"]["multiplier"])
             obj_map[ed]["rangesd"] = d_ng.Ipv4PrefixPools.add(NumberOfAddresses=val["rangesd"]["ip_address_count_4_ranges"])
             obj_map[ed]["rangesd"].PrefixLength.Single(val["rangesd"]["prefix"])
@@ -258,7 +244,7 @@ def hero_ixnetwork_config():
 
     for ed, val in td.items():
         for prop in properties:
-            if prop[0] == "rangesd" and ed=="enis":break
+            if prop[0] in ["rangesa", "rangesd"] and ed=="enis":break
             if prop[1]== "VlanId":
                 obj = obj_map[ed][prop[0]].Vlan.find().VlanId
             else:
@@ -273,9 +259,8 @@ def hero_ixnetwork_config():
             obj.Steps[indx].Step = value
 
     print ("*"*5,"Finished Updating custom Patterns",datetime.now(),"*"*5)
-
     print("Create Traffic")
-    ng_local = ixnetwork.Topology.find().DeviceGroup.find().NetworkGroup.find(Name="Local").Ipv4PrefixPools.find()
+    eni_ips = obj_map['enis']["ipv4"]
     ng_allow = ixnetwork.Topology.find().DeviceGroup.find().NetworkGroup.find(Name="Allow").Ipv4PrefixPools.find()
     ng_deny  = ixnetwork.Topology.find().DeviceGroup.find().NetworkGroup.find(Name="Deny").Ipv4PrefixPools.find()
 
@@ -291,26 +276,26 @@ def hero_ixnetwork_config():
 
         endpoints_allow_outbound.append(
                             (
-                            deepcopy([{"arg1": ng_local.href,"arg2": select_port,"arg3": 1,"arg4": reset_ip_count+1,"arg5": 1  }]),
+                            deepcopy([{"arg1": eni_ips.href,"arg2": select_port,"arg3": 1,"arg4": reset_ip_count+1,"arg5": 1  }]),
                             deepcopy([{"arg1": ng_allow.href,"arg2": select_port,"arg3": 1,"arg4": reset_ip_count*step_ip_a+1,"arg5": step_ip_a  }])
                             )
                           )
         endpoints_allow_inbound.append(
                             (
                             deepcopy([{"arg1": ng_allow.href,"arg2": select_port,"arg3": 1,"arg4": reset_ip_count*step_ip_a+1,"arg5": step_ip_a  }]),
-                            deepcopy([{"arg1": ng_local.href,"arg2": select_port,"arg3": 1,"arg4": reset_ip_count+1,"arg5": 1  }])
+                            deepcopy([{"arg1": eni_ips.href,"arg2": select_port,"arg3": 1,"arg4": reset_ip_count+1,"arg5": 1  }])
                             )
                           )
         endpoints_deny.append(
                             (
-                            deepcopy([{"arg1": ng_local.href,"arg2": select_port,    "arg3": 1,    "arg4": reset_ip_count+1,    "arg5": 1  }]),
+                            deepcopy([{"arg1": eni_ips.href,"arg2": select_port,    "arg3": 1,    "arg4": reset_ip_count+1,    "arg5": 1  }]),
                             deepcopy([{"arg1": ng_deny.href ,"arg2": select_port,    "arg3": 1,    "arg4": reset_ip_count*step_ip_d-1,    "arg5": step_ip_d  }])
                             )
                           )
         reset_ip_count+=1
 
     ti_allow_out = createTI("Outbound Allow - All IPs", endpoints_allow_outbound)
-    ti_allow_in = createTI("Inbound Allow - All IPs", endpoints_allow_inbound)
+    ti_allow_in = createTI("Inbound Allow - All IPs", endpoints_allow_inbound, udp_src_port = 20000, udp_dst_port = 20000)
     
     #ti_deny = createTI("Deny",  endpoints_deny)
 
