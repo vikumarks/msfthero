@@ -41,6 +41,8 @@ class HeroHelper:
             "autoMacGeneration": False
         },
         'userObjectiveType_cps': "connectionRate",
+        'constraintType_cps': "SimulatedUserConstraint",
+        'enableConstraint_cps': True,
         'userObjectiveType_tcp_bg': "concurrentConnections",
         'initial_objective': 15000000,
         'initial_objective_tcp_bg': 15000000,
@@ -511,9 +513,13 @@ class HeroHelper:
             kActivityOptionsToChange = {
                 # format: { activityName : { option : value } }
                 "HTTPClient1": {
-                    "userIpMapping": "1:ALL",
-                    "userObjectiveType": self.url_patch_dict['userObjectiveType_cps'],
-                    "userObjectiveValue": self.user_init_obj,
+                    'userIpMapping': "1:ALL",
+                    'enableConstraint': self.url_patch_dict['enableConstraint_cps'],
+                    'constraintType': self.url_patch_dict['constraintType_cps'],
+                    'constraintValue': self.url_patch_dict['ip_settings']['client']['host_count']
+                                       * len(self.client_ip_range_settings),
+                    'userObjectiveType': self.url_patch_dict['userObjectiveType_cps'],
+                    'userObjectiveValue': self.user_init_obj,
                 }
             }
         elif self.test_config_type == 'tcp_bg':
