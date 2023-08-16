@@ -19,6 +19,7 @@ import time
 
 class HeroHelper:
     save_rxf_path = "C:\\automation\\"
+    post_file = "C:\\automation\\400_bytes.txt"
     headers = {'Accept': 'application/json', 'Content-Type': 'application/json'}
     num_tcp_bg_gets = 1
     split_networks = True
@@ -227,10 +228,20 @@ class HeroHelper:
         'maximumInterval': "950",
         'minimumInterval': "950",
     }
+    post_dict = {
+        "commandType": "POST",
+        "destination": "Traffic2_HTTPServer1:80",
+        "pageObject": "/1b.html",
+        "arguments": post_file,
+    }
     command_loopend_dict = {'commandType': "LoopEndCommand"}
     kNewCommands_tcp_bg['HTTPClient1'].append(loop_count)
+
+    """
     for c in range(num_tcp_bg_gets):
         kNewCommands_tcp_bg['HTTPClient1'].append(GET_Command_dict)
+    """
+    kNewCommands_tcp_bg['HTTPClient1'].append(post_dict)
 
     kNewCommands_tcp_bg['HTTPClient1'].append(think_dict)
     kNewCommands_tcp_bg['HTTPClient1'].append(command_loopend_dict)
@@ -802,7 +813,6 @@ class HeroHelper:
             IxLoadUtils.log("Adding new commands %s session %s..." % (list(self.kNewCommands_tcp_bg), self.session_no))
             IxLoadUtils.addCommands(self.connection, self.session_url, self.kNewCommands_tcp_bg)
             IxLoadUtils.log("Commands added session {}.".format(self.session_no))
-
 
     def _create_client_ipmacvlan(self, nsgs_adjusted, enis_adjusted, ip_ranges_per_vpc):
 
