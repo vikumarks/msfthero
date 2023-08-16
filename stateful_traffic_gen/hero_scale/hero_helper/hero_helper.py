@@ -19,8 +19,11 @@ import time
 
 class HeroHelper:
     save_rxf_path = "C:\\automation\\"
-
+    post_file = "C:\\automation\\400_bytes.txt"
     headers = {'Accept': 'application/json', 'Content-Type': 'application/json'}
+    num_tcp_bg_gets = 1
+    split_networks = True
+    hero_b2b = False
 
     url_patch_dict = {
         'base_url': '',
@@ -39,6 +42,8 @@ class HeroHelper:
             "autoMacGeneration": False
         },
         'userObjectiveType_cps': "connectionRate",
+        'constraintType_cps': "SimulatedUserConstraint",
+        'enableConstraint_cps': True,
         'userObjectiveType_tcp_bg': "concurrentConnections",
         'initial_objective': 15000000,
         'initial_objective_tcp_bg': 15000000,
@@ -78,8 +83,8 @@ class HeroHelper:
             'url': "/ixload/test/activeTest/communityList/0/activityList/0/agent/headerList"
         },
         'timeline_settings': {
-            # basic timeline
-            'timelineType': 0,
+            # basic timeline = 0
+            'timelineType': 1,
             'url': "/ixload/test/activeTest/communityList/0/activityList/0/timeline",
             'activitylist_url': "/ixload/test/activeTest/communityList/0/activityList/0",
             'advanced': {
@@ -111,17 +116,14 @@ class HeroHelper:
                 'sustainTime': 300,
             },
             'advancedIteration': {
-                'd0': {'duration': 30, 'endObjectiveScale': 0},
-                'd1': {'duration': 20, 'endObjectiveScale': 0.1000002875},
-                'd2': {'duration': 200, 'endObjectiveScale': 0.1000002875},
-                'd3': {'duration': 10, 'endObjectiveScale': 0.1000002875},
-                'd4': {'duration': 10, 'endObjectiveScale': 0},
+                'd0': {'duration': 10},
+                'd1': {'duration': 200},
+                'd2': {'duration': 10},
             },
             'advancedIteration_tcp_bg': {
-                'd0': {'duration': 20, 'endObjectiveScale': 0.1000002875},
-                'd1': {'duration': 200, 'endObjectiveScale': 0.1000002875},
-                'd2': {'duration': 10, 'endObjectiveScale': 0.1000002875},
-                'd3': {'duration': 10, 'endObjectiveScale': 0},
+                'd0': {'duration': 20},
+                'd1': {'duration': 20000},
+                'd2': {'duration': 10},
             },
         },
         'client_range_setting': {
@@ -138,6 +140,10 @@ class HeroHelper:
         },
         'server_vlan_settings': {
             'json': {'firstId': ENI_START, 'uniqueCount': 1},
+            'url': "/ixload/test/activeTest/communityList/1/network/stack/childrenList/5/childrenList/6/rangeList/%s/vlanRange"
+        },
+        'server_vlan_b2b_settings': {
+            'json': {'firstId': ENI_START + ENI_L2R_STEP, 'uniqueCount': 1},
             'url': "/ixload/test/activeTest/communityList/1/network/stack/childrenList/5/childrenList/6/rangeList/%s/vlanRange"
         },
         'http_version': {
@@ -161,7 +167,8 @@ class HeroHelper:
             'url': "/ixload/test/activeTest/communityList/0/activityList/0/agent"
         },
         'tcp_adjust_tcp_buffers': {
-            'json': {'adjust_tcp_buffers': False, 'tcp_rmem_default': 1024, 'tcp_wmem_default': 1024},
+            'json': {'adjust_tcp_buffers': False, 'tcp_rmem_default': 65536,
+                     'tcp_wmem_default': 65536},
             'url': "/ixload/test/activeTest/communityList/0/network/globalPlugins/2"
         },
         'client_disable_tcp_tw_recycle': {
@@ -204,30 +211,42 @@ class HeroHelper:
         'Traffic2@Network2': ['HTTP Server']
     }
 
-    kNewCommands_tcp_bg = {
-        # format: { agent name : [ { field : value } ] }
-        'HTTPClient1': [
-            {
-                'commandType': "LoopBeginCommand",
-                'LoopCount': "20000",
-            },
-            {
-                'commandType': "GET",
-                'destination': "Traffic2_HTTPServer1:80",
-                'pageObject': "/1b.html",
-            },
-            {
-                'commandType': "THINK",
-                'maximumInterval': "950",
-                'minimumInterval': "950",
-
-            },
-            {
-                'commandType': "LoopEndCommand",
-            },
-        ],
+    ## HTTPClient1 Commands
+    # tcp bg
+    kNewCommands_tcp_bg = {'HTTPClient1': [], }
+    loop_count = {
+        'commandType': "LoopBeginCommand",
+        'LoopCount': "20000",
     }
+    GET_Command_dict = {
+        'commandType': "GET",
+        'destination': "Traffic2_HTTPServer1:80",
+        'pageObject': "/1b.html",
+    }
+    think_dict = {
+        'commandType': "THINK",
+        'maximumInterval': "950",
+        'minimumInterval': "950",
+    }
+    post_dict = {
+        "commandType": "POST",
+        "destination": "Traffic2_HTTPServer1:80",
+        "pageObject": "/1b.html",
+        "arguments": post_file,
+    }
+    command_loopend_dict = {'commandType': "LoopEndCommand"}
+    kNewCommands_tcp_bg['HTTPClient1'].append(loop_count)
 
+    """
+    for c in range(num_tcp_bg_gets):
+        kNewCommands_tcp_bg['HTTPClient1'].append(GET_Command_dict)
+    """
+    kNewCommands_tcp_bg['HTTPClient1'].append(post_dict)
+
+    kNewCommands_tcp_bg['HTTPClient1'].append(think_dict)
+    kNewCommands_tcp_bg['HTTPClient1'].append(command_loopend_dict)
+
+    # tcp cps
     kNewCommands_cps = {
         # format: { agent name : [ { field : value } ] }
         'HTTPClient1': [
@@ -268,7 +287,6 @@ class HeroHelper:
             self.eni_count = ENI_COUNT
 
             # Network settings used for generating client and server networks
-            self.split_networks = self.url_patch_dict['split_networks'] # If True assigns odd ENIs to IxL test
             self.ixl_network_percentage = 0.25
             self.tcp_bg_adjust_percentage = self.ixl_network_percentage
             self.enis = self.eni_count
@@ -506,9 +524,13 @@ class HeroHelper:
             kActivityOptionsToChange = {
                 # format: { activityName : { option : value } }
                 "HTTPClient1": {
-                    "userIpMapping": "1:ALL",
-                    "userObjectiveType": self.url_patch_dict['userObjectiveType_cps'],
-                    "userObjectiveValue": self.user_init_obj,
+                    'userIpMapping': "1:ALL",
+                    'enableConstraint': self.url_patch_dict['enableConstraint_cps'],
+                    'constraintType': self.url_patch_dict['constraintType_cps'],
+                    'constraintValue': self.url_patch_dict['ip_settings']['client']['host_count']
+                                       * len(self.client_ip_range_settings),
+                    'userObjectiveType': self.url_patch_dict['userObjectiveType_cps'],
+                    'userObjectiveValue': self.user_init_obj,
                 }
             }
         elif self.test_config_type == 'tcp_bg':
@@ -791,7 +813,6 @@ class HeroHelper:
             IxLoadUtils.log("Adding new commands %s session %s..." % (list(self.kNewCommands_tcp_bg), self.session_no))
             IxLoadUtils.addCommands(self.connection, self.session_url, self.kNewCommands_tcp_bg)
             IxLoadUtils.log("Commands added session {}.".format(self.session_no))
-
 
     def _create_client_ipmacvlan(self, nsgs_adjusted, enis_adjusted, ip_ranges_per_vpc):
 
@@ -1740,8 +1761,12 @@ class HeroHelper:
             firstId = url_patch_dict['client_vlan_settings']['json']['firstId'] + index
             uniqueCount = url_patch_dict['client_vlan_settings']['json']['uniqueCount']
         else:
-            firstId = url_patch_dict['server_vlan_settings']['json']['firstId'] + index
-            uniqueCount = url_patch_dict['server_vlan_settings']['json']['uniqueCount']
+            if self.hero_b2b is True:
+                firstId = url_patch_dict['server_vlan_b2b_settings']['json']['firstId'] + index
+                uniqueCount = url_patch_dict['server_vlan_b2b_settings']['json']['uniqueCount']
+            else:
+                firstId = url_patch_dict['server_vlan_settings']['json']['firstId'] + index
+                uniqueCount = url_patch_dict['server_vlan_settings']['json']['uniqueCount']
 
         vlan_settings = {'firstId': firstId, 'uniqueCount': uniqueCount}
 
