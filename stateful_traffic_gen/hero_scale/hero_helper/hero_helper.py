@@ -19,9 +19,9 @@ import time
 
 class HeroHelper:
     save_rxf_path = "C:\\automation\\"
-    post_file = "C:\\automation\\400_bytes.txt"
+    post_file = "{}367_bytes.txt".format(save_rxf_path)
     headers = {'Accept': 'application/json', 'Content-Type': 'application/json'}
-    num_tcp_bg_gets = 1
+    #num_tcp_bg_gets = 1
     split_networks = True
     hero_b2b = False
 
@@ -41,7 +41,7 @@ class HeroHelper:
         'auto_mac_setting': {
             "autoMacGeneration": False
         },
-        'userObjectiveType_cps': "connectionRate",
+        'userObjectiveType_cps': "simulatedUsers",
         'constraintType_cps': "SimulatedUserConstraint",
         'enableConstraint_cps': True,
         'userObjectiveType_tcp_bg': "concurrentConnections",
@@ -225,8 +225,8 @@ class HeroHelper:
     }
     think_dict = {
         'commandType': "THINK",
-        'maximumInterval': "950",
-        'minimumInterval': "950",
+        'maximumInterval': "4950",
+        'minimumInterval': "4950",
     }
     post_dict = {
         "commandType": "POST",
@@ -525,12 +525,9 @@ class HeroHelper:
                 # format: { activityName : { option : value } }
                 "HTTPClient1": {
                     'userIpMapping': "1:ALL",
-                    'enableConstraint': self.url_patch_dict['enableConstraint_cps'],
-                    'constraintType': self.url_patch_dict['constraintType_cps'],
-                    'constraintValue': self.url_patch_dict['ip_settings']['client']['host_count']
-                                       * len(self.client_ip_range_settings),
                     'userObjectiveType': self.url_patch_dict['userObjectiveType_cps'],
-                    'userObjectiveValue': self.user_init_obj,
+                    'userObjectiveValue': self.url_patch_dict['ip_settings']['client']['host_count']
+                                       * len(self.client_ip_range_settings)
                 }
             }
         elif self.test_config_type == 'tcp_bg':

@@ -42,6 +42,9 @@ and saved separately.</li>
 <li>In testbed.py change to use address of client system:  'server': [{'addr': '10.1.1.1', 'rest': 8080}],</li>
 <li>Change interface address to use chassis cards: 'interfaces': [ ['10.1.1.10', 1, 1], ['10.1.1.10', 1, 2],
 <ol>card address, slot#, port#</ol></li>
+<li>On the client system running IxLoad create the following directory and copy file 367_bytes.txt at the location. 
+<ol><li>Create dirctory: C:\automation\</li>
+<li>Place file at location: C:\automation\367_bytes.txt</li></ol>
 <li>Change the save rxf path inside hero_helper/hero_helper.py line 21
 <ol>change to desired location: save_rxf_path = "C:\\automation\\"</ol></li>
 <li>To change scale of test edit hero_scale/variables.py line 10
