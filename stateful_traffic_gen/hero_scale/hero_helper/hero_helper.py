@@ -831,6 +831,8 @@ class HeroHelper:
             range_adjust = 0
             if self.eni_count == 64:
                 range_adjust = 1
+            elif self.eni_count == 128:
+                range_adjust = 13
             for i in range(nsgs_adjusted + ip_ranges_per_vpc - (bg_net_split * self.ip_ranges_per_vpc)
                            + range_adjust):
                 if ip_count < ip_ranges_per_vpc and eni_index <= enis_adjusted_cps:
@@ -851,6 +853,8 @@ class HeroHelper:
                 range_adjust = 2
             elif self.eni_count == 64:
                 range_adjust = 3
+            elif self.eni_count == 128:
+                range_adjust = 8
             for i in range(bg_net_split * ip_ranges_per_vpc + range_adjust):
                 if ip_count < ip_ranges_per_vpc and eni_index <= enis_adjusted:
                     # --- ixNet objects need to be added in the list before they are configured.
