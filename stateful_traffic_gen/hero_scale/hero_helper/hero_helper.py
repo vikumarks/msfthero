@@ -42,8 +42,9 @@ class HeroHelper:
             "autoMacGeneration": False
         },
         'userObjectiveType_cps': "simulatedUsers",
-        'constraintType_cps': "SimulatedUserConstraint",
+        'constraintType_cps': "ConnectionRateConstraint",
         'enableConstraint_cps': True,
+        'enableConstraintValue_cps': 3000000,
         'userObjectiveType_tcp_bg': "concurrentConnections",
         'initial_objective': 15000000,
         'initial_objective_tcp_bg': 15000000,
@@ -520,30 +521,8 @@ class HeroHelper:
         IxLoadUtils.assignPorts(self.connection, self.session_url, self.test_settings.portListPerCommunity)
         IxLoadUtils.log("Ports assigned session {}.".format(self.session_no))
 
-        if self.test_config_type == 'cps':
-            kActivityOptionsToChange = {
-                # format: { activityName : { option : value } }
-                "HTTPClient1": {
-                    'userIpMapping': "1:ALL",
-                    'userObjectiveType': self.url_patch_dict['userObjectiveType_cps'],
-                    'userObjectiveValue': self.url_patch_dict['ip_settings']['client']['host_count']
-                                       * len(self.client_ip_range_settings)
-                }
-            }
-        elif self.test_config_type == 'tcp_bg':
-            kActivityOptionsToChange = {
-                # format: { activityName : { option : value } }
-                'HTTPClient1': {
-                    'userIpMapping': "1:1",
-                    'enableConstraint': False,
-                    'userObjectiveType': self.url_patch_dict['userObjectiveType_tcp_bg'],
-                    'userObjectiveValue': self.user_init_obj_tcp_bg,
-                }
-            }
-
-        IxLoadUtils.log("Updating the objective value settings session {}...".format(self.session_no))
-        IxLoadUtils.changeActivityOptions(self.connection, self.session_url, kActivityOptionsToChange)
-        IxLoadUtils.changeActivityOptions(self.connection, self.session_url, kActivityOptionsToChange)
+        # Set the Test objective and Constraint
+        self._set_test_objectives()
         IxLoadUtils.log("Objective value updated for session {}.".format(self.session_no))
 
     def _createconfig_ixn(self, settings_dict, no_of_cards):
@@ -833,6 +812,8 @@ class HeroHelper:
                 range_adjust = 1
             elif self.eni_count == 128:
                 range_adjust = 13
+            elif self.eni_count == 256:
+                range_adjust = 37
             for i in range(nsgs_adjusted + ip_ranges_per_vpc - (bg_net_split * self.ip_ranges_per_vpc)
                            + range_adjust):
                 if ip_count < ip_ranges_per_vpc and eni_index <= enis_adjusted_cps:
@@ -855,6 +836,8 @@ class HeroHelper:
                 range_adjust = 3
             elif self.eni_count == 128:
                 range_adjust = 8
+            elif self.eni_count == 256:
+                range_adjust = 15
             for i in range(bg_net_split * ip_ranges_per_vpc + range_adjust):
                 if ip_count < ip_ranges_per_vpc and eni_index <= enis_adjusted:
                     # --- ixNet objects need to be added in the list before they are configured.
@@ -1709,8 +1692,10 @@ class HeroHelper:
         return cps_max_w_ts, failures_dict, test_run_results, latency_ranges
 
     def _save_rxf(self):
+
         IxLoadUtils.log("Saving rxf session {}".format(self.session_no))
-        file_path = "{}Hero_{}{}.rxf".format(self.save_rxf_path, self.test_config_type, self.id)
+        file_path = "{}Hero{}ENIs_{}{}.rxf".format(self.save_rxf_path, self.eni_count,
+                                                   self.test_config_type, self.id)
         IxLoadUtils.saveRxf(self.connection, self.session_url, file_path)
 
     def _set_ip_range_options(self, ip_count, eni_index, nodetype):
@@ -1752,6 +1737,46 @@ class HeroHelper:
         macOptionsToChange = {"mac": mac_address, "incrementBy": mac_increment}
 
         return macOptionsToChange
+
+    def _set_test_objectives(self):
+
+        if self.test_config_type == 'cps':
+            cps_constraint_value = self.url_patch_dict['enableConstraintValue_cps']
+            if self.eni_count == 64:
+                cps_constraint_value = cps_constraint_value * 2
+            elif self.eni_count == 128:
+                cps_constraint_value = cps_constraint_value * 4
+            elif self.eni_count == 256:
+                cps_constraint_value = cps_constraint_value * 8
+
+            kActivityOptionsToChange = {
+                # format: { activityName : { option : value } }
+                "HTTPClient1": {
+                    'userIpMapping': "1:ALL",
+                    'userObjectiveType': self.url_patch_dict['userObjectiveType_cps'],
+                    'userObjectiveValue': self.url_patch_dict['ip_settings']['client']['host_count']
+                                          * len(self.client_ip_range_settings),
+                    'constraintType': self.url_patch_dict['constraintType_cps'],
+                    'constraintValue': cps_constraint_value,
+                    'enableConstraint': self.url_patch_dict['enableConstraint_cps']
+                }
+            }
+        elif self.test_config_type == 'tcp_bg':
+            kActivityOptionsToChange = {
+                # format: { activityName : { option : value } }
+                'HTTPClient1': {
+                    'userIpMapping': "1:1",
+                    'enableConstraint': False,
+                    'userObjectiveType': self.url_patch_dict['userObjectiveType_tcp_bg'],
+                    'userObjectiveValue': self.user_init_obj_tcp_bg,
+                }
+            }
+
+        IxLoadUtils.log("Updating the objective value settings session {}...".format(self.session_no))
+        IxLoadUtils.changeActivityOptions(self.connection, self.session_url, kActivityOptionsToChange)
+        IxLoadUtils.changeActivityOptions(self.connection, self.session_url, kActivityOptionsToChange)
+
+        return
 
     def _set_vlan_range_options(self, url_patch_dict, index, nodetype="client"):
 
