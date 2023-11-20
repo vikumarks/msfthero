@@ -16,7 +16,6 @@ import requests
 import json
 import time
 
-
 class HeroHelper:
     save_rxf_path = "C:\\automation\\"
     post_file = "{}367_bytes.txt".format(save_rxf_path)
@@ -54,7 +53,7 @@ class HeroHelper:
         'MIN_CPS': 0,
         'ip_settings': {
             'client': {
-                'host_count': 64000,
+                'host_count': 12500,
                 'increment_by': "0.0.0.2"
             },
             'server': {
@@ -288,8 +287,8 @@ class HeroHelper:
             self.eni_count = ENI_COUNT
 
             # Network settings used for generating client and server networks
-            self.ixl_network_percentage = 0.25
-            self.tcp_bg_adjust_percentage = self.ixl_network_percentage
+            self.ixl_network_percentage = 0.5
+            self.tcp_bg_adjust_percentage = 0.25    # self.ixl_network_percentage
             self.enis = self.eni_count
             self.ip_ranges_per_vpc = ACL_TABLE_COUNT * 2
             self.nsgs = self.enis * self.ip_ranges_per_vpc
@@ -486,13 +485,13 @@ class HeroHelper:
         # save rxf
         self._save_rxf()
 
+
     def _build_node_ips(self, count, vpc, nodetype="client"):
 
         if nodetype in "client":
-            ip = ipaddress.ip_address(int(IP_R_START) + (IP_STEP_NSG * count)
-                        + int(ipaddress.ip_address('{}.0.0.0'.format(vpc-1))))
+            ip = ipp(int(IP_R_START) + (IP_STEP_NSG * count) + int(ipp('0.128.0.0')) * (vpc-1))
         if nodetype in "server":
-            ip = ipaddress.ip_address(int(IP_L_START) + int(ipaddress.ip_address('{}.0.0.0'.format(vpc-1))))
+            ip = ipp(int(IP_L_START) + int(ipp('0.128.0.0')) * (vpc-1))
 
         return ip
 
@@ -500,11 +499,9 @@ class HeroHelper:
 
         if nodetype in "client":
 
-            m = macaddress.MAC(int(MAC_R_START) + int(macaddress.MAC('00-00-00-60-00-00')) *
-                               (vpc - 1) + (int(macaddress.MAC(ACL_TABLE_MAC_STEP)) * count))
+            m = maca(int(MAC_R_START) + int(maca('00-00-00-30-00-00')) * (vpc - 1) + (int(maca(ACL_TABLE_MAC_STEP)) * count))
         if nodetype in "server":
-            m = macaddress.MAC(int(MAC_L_START) + int(macaddress.MAC('00-00-00-60-00-00')) *
-                               (vpc - 1))
+            m = maca(int(MAC_L_START) + int(maca('00-00-00-30-00-00')) * (vpc - 1))
 
         return m
 
@@ -563,18 +560,18 @@ class HeroHelper:
         vlan.VlanId.Increment(start_value=ENI_START+1,step_value=0)
         vlan.VlanId.Steps[0].Enabled = True
         vlan.VlanId.Steps[0].Step = 2
-        obj_map["enis"]["ethernet"].Mac.Increment(start_value = str(macaddress.MAC(int(MAC_L_START) + int(macaddress.MAC(ENI_MAC_STEP)))).replace('-', ':'), step_value='00:00:00:30:00:00')
+        obj_map["enis"]["ethernet"].Mac.Increment(start_value = str(maca(int(MAC_L_START) + int(maca(ENI_MAC_STEP)))).replace('-', ':'), step_value='00:00:00:30:00:00')
         obj_map["enis"]["ethernet"].Mac.Steps[0].Enabled = False
         #enis ips
-        obj_map["enis"]["ip"].Address.Increment  (start_value=str(ipaddress.ip_address(int(IP_L_START)+IP_STEP_ENI)), step_value="0.1.0.0")
-        obj_map["enis"]["ip"].GatewayIp.Increment(start_value=str(ipaddress.ip_address(int(IP_R_START)+IP_STEP_ENI)), step_value="0.1.0.0")
+        obj_map["enis"]["ip"].Address.Increment  (start_value=str(ipp(int(IP_L_START)+IP_STEP_ENI)), step_value="0.1.0.0")
+        obj_map["enis"]["ip"].GatewayIp.Increment(start_value=str(ipp(int(IP_R_START)+IP_STEP_ENI)), step_value="0.1.0.0")
         obj_map["enis"]["ip"].Address.Steps[0].Enabled = True
         obj_map["enis"]["ip"].Address.Steps[0].Step = "2.0.0.0"
         obj_map["enis"]["ip"].GatewayIp.Steps[0].Enabled = True
         obj_map["enis"]["ip"].GatewayIp.Steps[0].Step = "2.0.0.0"
         obj_map["enis"]["ip"].Prefix.Single(32)
         #enis(Local) ips
-        obj_map["enis"]["local"].NetworkAddress.Increment(start_value=str(ipaddress.ip_address(int(IP_L_START)+IP_STEP_ENI)), step_value="0.1.0.0")
+        obj_map["enis"]["local"].NetworkAddress.Increment(start_value=str(ipp(int(IP_L_START)+IP_STEP_ENI)), step_value="0.1.0.0")
         obj_map["enis"]["local"].PrefixLength.Single(32)
         obj_map["enis"]["local"].NetworkAddress.Steps[1].Enabled=True
         obj_map["enis"]["local"].NetworkAddress.Steps[1].Step = "2.0.0.0"
@@ -600,22 +597,22 @@ class HeroHelper:
         vlan.VlanId.Steps[0].Enabled = True
         vlan.VlanId.Steps[0].Step = 2
         obj_map["clients"]["ethernet"].Mac.Custom(
-            start_value=str(macaddress.MAC(int(MAC_R_START) + int(macaddress.MAC(ENI_MAC_STEP)))).replace('-', ':'),
+            start_value=str(maca(int(MAC_R_START) + int(maca(ENI_MAC_STEP)))).replace('-', ':'),
             step_value = "00:00:00:04:00:00",
             increments = [("00:00:00:04:00:00", 6,[("00:00:00:00:00:02", 21333,[])])]
         )
         obj_map["clients"]["ethernet"].Mac.Steps[0].Enabled = True
         obj_map["clients"]["ethernet"].Mac.Steps[0].Step = '00:00:00:30:00:00'
         #client ips
-        obj_map["clients"]["ip"].Address.Increment  (start_value=str(ipaddress.ip_address(int(IP_R_START)+IP_STEP_ENI)), step_value="0.0.0.1")
-        obj_map["clients"]["ip"].GatewayIp.Increment(start_value=str(ipaddress.ip_address(int(IP_L_START)+IP_STEP_ENI)), step_value="0.0.0.1")
+        obj_map["clients"]["ip"].Address.Increment  (start_value=str(ipp(int(IP_R_START)+IP_STEP_ENI)), step_value="0.0.0.1")
+        obj_map["clients"]["ip"].GatewayIp.Increment(start_value=str(ipp(int(IP_L_START)+IP_STEP_ENI)), step_value="0.0.0.1")
         obj_map["clients"]["ip"].Address.Steps[0].Enabled = True
         obj_map["clients"]["ip"].Address.Steps[0].Step = "2.0.0.0"
         obj_map["clients"]["ip"].GatewayIp.Steps[0].Enabled = True
         obj_map["clients"]["ip"].GatewayIp.Steps[0].Step = "2.0.0.0"
         obj_map["clients"]["ip"].Prefix.Single(32)
         #client(Remote) ips
-        obj_map["clients"]["remote"].NetworkAddress.Increment(start_value=str(ipaddress.ip_address(int(IP_R_START)+IP_STEP_ENI)), step_value="0.4.0.0")
+        obj_map["clients"]["remote"].NetworkAddress.Increment(start_value=str(ipp(int(IP_R_START)+IP_STEP_ENI)), step_value="0.4.0.0")
         obj_map["clients"]["remote"].PrefixAddrStep.Single(2)
         obj_map["clients"]["remote"].NumberOfAddressesAsy.Single(128000)
         obj_map["clients"]["remote"].PrefixLength.Single(32)
@@ -811,7 +808,7 @@ class HeroHelper:
             if self.eni_count == 64:
                 range_adjust = 1
             elif self.eni_count == 128:
-                range_adjust = 13
+                range_adjust = 37
             elif self.eni_count == 256:
                 range_adjust = 37
             for i in range(nsgs_adjusted + ip_ranges_per_vpc - (bg_net_split * self.ip_ranges_per_vpc)
@@ -835,7 +832,7 @@ class HeroHelper:
             elif self.eni_count == 64:
                 range_adjust = 3
             elif self.eni_count == 128:
-                range_adjust = 8
+                range_adjust = 15
             elif self.eni_count == 256:
                 range_adjust = 15
             for i in range(bg_net_split * ip_ranges_per_vpc + range_adjust):
@@ -1694,7 +1691,7 @@ class HeroHelper:
     def _save_rxf(self):
 
         IxLoadUtils.log("Saving rxf session {}".format(self.session_no))
-        file_path = "{}Hero{}ENIs_{}{}.rxf".format(self.save_rxf_path, self.eni_count,
+        file_path = "{}Hero_{}ENIs_{}{}.rxf".format(self.save_rxf_path, self.eni_count,
                                                    self.test_config_type, self.id)
         IxLoadUtils.saveRxf(self.connection, self.session_url, file_path)
 
@@ -1781,7 +1778,7 @@ class HeroHelper:
     def _set_vlan_range_options(self, url_patch_dict, index, nodetype="client"):
 
         if index > 0:
-            index = index + 3 * index
+            index = index + 1 * index
 
         if nodetype == 'client':
             firstId = url_patch_dict['client_vlan_settings']['json']['firstId'] + index
