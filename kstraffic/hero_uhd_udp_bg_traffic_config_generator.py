@@ -20,37 +20,40 @@ ipa = ipaddress.ip_address
 maca = macaddress.MAC
 
 cp = {}
-for ip in ['IP_STEP1','IP_STEP_ENI','IP_STEP_NSG','IP_STEP_ACL','IP_STEPE','IP_L_START','IP_R_START','PAL','PAR']:
+for ip in ['IP_STEP1','IP_STEP_ENI','IP_STEP_NSG','IP_STEP_ACL','IP_STEPE','IP_L_START','IP_R_START','PAL','PAR', 'IP_STEP_ENI']:
     cp[ip] = int(ipa(df[ip]))
 for mac in ['MAC_L_START','MAC_R_START','ACL_NSG_MAC_STEP','ACL_POLICY_MAC_STEP','ENI_MAC_STEP']:
     cp[mac] = int(maca(df[mac]))
 cp = DefaultMunch.fromDict(cp)
 
 # *****************************Frame Per Sec **************************************************************
-pps                             = 15000000
-number_of_enis_for_udb_traffic  = 16 * 2                 #Multiply by 2 coz of inbund and outbound traffic 
+pps                             = 15*1000000                       #In Millions
+if len(sys.argv) == 2:pps = int(sys.argv[1])*1000000
+number_of_enis_for_udb_traffic  = p.ENI_COUNT // 2                 #Multiply by 2 coz of inbund and outbound traffic 
 number_of_ranges_per_eni        = 10
 ip_address_count_4_ranges       = int(pps/(number_of_enis_for_udb_traffic*number_of_ranges_per_eni))
-framesPerSecond                 = number_of_ranges_per_eni * int(ip_address_count_4_ranges + ip_address_count_4_ranges * 0.06667)/5            #6.6667%    (totalnumber_of_flows + 6.6667% of totalnumber_of_flows) / 5
-
+#if ip_address_count_4_ranges > 65536:ip_address_count_4_ranges = 65536
+framesPerSecond                 = int(number_of_ranges_per_eni * int(ip_address_count_4_ranges + ip_address_count_4_ranges * 0.06667)/5) // 2            #6.6667%    (totalnumber_of_flows + 6.6667% of totalnumber_of_flows) / 5
+#65536
 # *********************************************************************************************************
+
 
 TESTBED = {
     'stateless': [
         {
-            'server': [{'addr': '10.36.78.203', 'rest': 11009}],                                                    #IxNetwork API Server IP and Rest Port, if IxNetwork WEB , use default port 443
+            'server': [{'addr': '10.36.78.203', 'rest': 11017}],                                                    #IxNetwork API Server IP and Rest Port, if IxNetwork WEB , use default port 443
             'tgen':    [
                 {
                     'type': 'keysight',
                             'interfaces': [
-                                            {'location':'10.36.79.165;11;1','fec':True,'an':True,'ieee':True},      #ChassisIP;cardId;PortNumber
-                                            {'location':'10.36.79.165;11;2','fec':True,'an':True,'ieee':True},
-                                            {'location':'10.36.79.165;11;3','fec':True,'an':True,'ieee':True},
-                                            {'location':'10.36.79.165;11;4','fec':True,'an':True,'ieee':True},
-                                            {'location':'10.36.79.165;11;5','fec':True,'an':True,'ieee':True},
-                                            {'location':'10.36.79.165;11;6','fec':True,'an':True,'ieee':True},
-                                            {'location':'10.36.79.165;11;7','fec':True,'an':True,'ieee':True},
-                                            {'location':'10.36.79.165;11;8','fec':True,'an':True,'ieee':True},
+                                            {'location':'10.36.77.159;1;1','fec':True,'an':True,'ieee':True},      #ChassisIP;cardId;PortNumber
+                                            {'location':'10.36.77.159;1;2','fec':True,'an':True,'ieee':True},
+                                            {'location':'10.36.77.159;1;3','fec':True,'an':True,'ieee':True},
+                                            {'location':'10.36.77.159;1;4','fec':True,'an':True,'ieee':True},
+                                            {'location':'10.36.77.159;1;5','fec':True,'an':True,'ieee':True},
+                                            {'location':'10.36.77.159;1;6','fec':True,'an':True,'ieee':True},
+                                            {'location':'10.36.77.159;1;7','fec':True,'an':True,'ieee':True},
+                                            {'location':'10.36.77.159;1;8','fec':True,'an':True,'ieee':True},
                                             ],
                 }]}]
        }
@@ -62,29 +65,25 @@ test_data = {
         "eth": {
                     "mac": {
                                 "start_value":str(maca(cp.MAC_L_START + cp.ENI_MAC_STEP)).replace('-', ':'),
-                                "step_value":'00:00:00:60:00:00',
-                                "increments":[(p.ENI_MAC_STEP, 3,[])],                                          # p.ACL_NSG_COUNT +-*?  insted of 3?
-                                "ng_step":"00:00:01:80:00:00"
+                                "step_value":'00:00:00:00:00:00',
+                                "increments":[('00:00:00:30:00:00', p.ENI_COUNT // 2,[])],                                          # p.ACL_NSG_COUNT +-*?  insted of 3?
                             },
                     "vlanid":{
                                 "start_value":p.ENI_START+1,
-                                "step_value":4,
-                                "increments":[(1, 3,[])],                                                       # p.ACL_NSG_COUNT +-*?  insted of 3?
-                                "ng_step":16                                                                    # p.IP_ROUTE_DIVIDER_PER_ACL_RULE   16?
+                                "step_value":p.ENI_COUNT,
+                                "increments":[(2, p.ENI_COUNT // 2,[])],
                             }
                 },
         "ipv4": {
                     "ip":  {
                             "start_value":str(ipa(cp.IP_L_START + cp.IP_STEP_ENI)), 
-                            "step_value":'1.0.0.0', 
-                            "increments":[(p.IP_STEP_ENI, 3,[])],                                               # p.ACL_NSG_COUNT +-*?  insted of 3?
-                            "ng_step":"4.0.0.0"
+                            "step_value":'0.0.0.0', 
+                            "increments":[(str(ipa(cp.IP_STEP_ENI*2)), p.ENI_COUNT // 2,[])],                                               # p.ACL_NSG_COUNT +-*?  insted of 3?
                             }, 
                     "gip": {
                             "start_value":str(ipa(cp.IP_R_START + cp.IP_STEP_ENI)), 
-                            "step_value":'1.0.0.0', 
-                            "increments":[(p.IP_STEP_ENI, 3,[])],                                               # p.ACL_NSG_COUNT +-*?  insted of 3?
-                            "ng_step":"4.0.0.0"
+                            "step_value":'0.0.0.0', 
+                            "increments":[(str(ipa(cp.IP_STEP_ENI*2)), p.ENI_COUNT // 2,[])],                                               # p.ACL_NSG_COUNT +-*?  insted of 3?
                             }, 
                     "mac": "08:C0:EB:20:38:2C",                                                                 #DPU MAC
                     "prefix":32
@@ -94,31 +93,27 @@ test_data = {
         "eth": {
                     "mac": {
                                 "start_value":str(maca(cp.MAC_R_START + cp.ENI_MAC_STEP)).replace('-', ':'),
-                                "step_value":'00:00:00:60:00:00',
-                                "increments":[(p.ENI_MAC_STEP, 3,[])],                                          # p.ACL_NSG_COUNT +-*?  insted of 3?
-                                "ng_step":"00:00:01:80:00:00"
+                                "step_value":'00:00:00:00:00:00',
+                                "increments":[('00:00:00:30:00:00', p.ENI_COUNT // 2,[])],
                             },
 
                     "vlanid":{
                                 "start_value":p.ENI_START+p.ENI_L2R_STEP+1,
-                                "step_value":4,
-                                "increments":[(1, 3,[])],
-                                "ng_step":16                                                                    # p.IP_ROUTE_DIVIDER_PER_ACL_RULE   16?
+                                "step_value":p.ENI_COUNT,
+                                "increments":[(2, p.ENI_COUNT // 2,[])],
                             }
                 },
 
         "ipv4": {
                     "ip":  {
                             "start_value":str(ipa(cp.IP_R_START + cp.IP_STEP_ENI)), 
-                            "step_value":'1.0.0.0', 
-                            "increments":[(p.IP_STEP_ENI, 3,[])],                                               # p.ACL_NSG_COUNT +-*?  insted of 3?
-                            "ng_step":"4.0.0.0"
+                            "step_value":'0.0.0.0', 
+                            "increments":[(str(ipa(cp.IP_STEP_ENI*2)), p.ENI_COUNT // 2,[])],                                               # p.ACL_NSG_COUNT +-*?  insted of 3?
                             },
                     "gip": {
                             "start_value":str(ipa(cp.IP_L_START + cp.IP_STEP_ENI)), 
-                            "step_value":'1.0.0.0', 
-                            "increments":[(p.IP_STEP_ENI, 3,[])],                                               # p.ACL_NSG_COUNT +-*?  insted of 3? 
-                            "ng_step":"4.0.0.0"
+                            "step_value":'0.0.0.0', 
+                            "increments":[(str(ipa(cp.IP_STEP_ENI*2)), p.ENI_COUNT // 2,[])],                                               # p.ACL_NSG_COUNT +-*?  insted of 3? 
                             },
                     "mac": "08:C0:EB:20:38:2C",                                                                 #DPU MAC
                     "prefix":32
@@ -126,9 +121,9 @@ test_data = {
         "rangesa": {
                     "ip":  {
                             "start_value":str(ipa(cp.IP_R_START + cp.IP_STEP_ENI)), 
-                            "step_value":"1.0.0.0",  #p.IP_STEP_ENI, 
-                            "increments":[(p.IP_STEP_ENI, 3,[(p.IP_STEP_NSG,10,[])])],                          # 1-A 10 is ranges ip Step  and ACL_NSG_COUNT =3 or 5 6 or 10 in all direction
-                            "ng_step":(1,"4.0.0.0")
+                            "step_value":"0.0.0.0",  #p.IP_STEP_ENI, 
+                            "increments":[(str(ipa(cp.IP_STEP_ENI*2)), p.ENI_COUNT // 2,[(p.IP_STEP_NSG,10,[])])],                          # 1-A 10 is ranges ip Step  and ACL_NSG_COUNT =3 or 5 6 or 10 in all direction
+                            
                             },
                     "ip_address_count_4_ranges": ip_address_count_4_ranges,
                     "multiplier": number_of_ranges_per_eni,                                                                           # 1- 10 is ranges ip Step Number should match with 1-A
@@ -138,11 +133,11 @@ test_data = {
         "rangesd": {
                     "ip":  {
                             "start_value":str(ipa(cp.IP_R_START + cp.IP_STEP_ENI) -1),
-                            "step_value":"1.0.0.0",  #p.IP_STEP_ENI, 
-                            "increments":[(p.IP_STEP_ENI, 3,[(p.IP_STEP_NSG,10,[])])],                          # 1-A 10 is ranges ip Step  and ACL_NSG_COUNT =3 or 5 6 or 10 in all direction
-                            "ng_step":(1,"4.0.0.0")
+                            "step_value":"0.0.0.0",  #p.IP_STEP_ENI, 
+                            "increments":[(str(ipa(cp.IP_STEP_ENI*2)), p.ENI_COUNT // 2,[(p.IP_STEP_NSG,10,[])])],                          # 1-A 10 is ranges ip Step  and ACL_NSG_COUNT =3 or 5 6 or 10 in all direction
+                            
                             },
-                    "ip_address_count_4_ranges": 128,
+                    "ip_address_count_4_ranges": p.ENI_COUNT,
                     "multiplier": number_of_ranges_per_eni,                                                                           # 1- 10 is ranges ip Step Number should match with 1-A
                     "prefix":32,
                     'prefixaddrstep':2
@@ -150,7 +145,6 @@ test_data = {
 
     }
 }
-
 
 
 ixnetwork=None
@@ -180,7 +174,7 @@ def hero_ixnetwork_config():
                 ce.TransmissionControl.Type = 'continuous'
                 ce.FrameRateDistribution.PortDistribution = 'splitRateEvenly'
                 ce.FrameRateDistribution.StreamDistribution = 'splitRateEvenly'
-                ce.FrameSize.FixedSize = 440
+                ce.FrameSize.FixedSize = 78
                 ce.FrameRate.update(Type='framesPerSecond', Rate=framesPerSecond)
                 inner_udp = ce.Stack.read(ipv4_template.AppendProtocol(udp_template))
                 inn_sp = inner_udp.Field.find(DisplayName='^UDP-Source-Port')
@@ -205,6 +199,7 @@ def hero_ixnetwork_config():
 
     session_assistant = SessionAssistant(IpAddress=tb['server'][0]['addr'], RestPort=tb['server'][0]['rest'], UserName='admin', Password='admin', SessionName="HeroTest", ClearConfig=True)
     ixnetwork = session_assistant.Ixnetwork
+
     portList = [{'xpath': '/vport[%s]' % str(indx+1), 'name': 'VTEP_0%d' % (indx+1), 'location': p['location']} for indx, p in enumerate(tb['tgen'][0]['interfaces'])]
     ixnetwork.ResourceManager.ImportConfig(json.dumps(portList), False)
     vports = list(ixnetwork.Vport.find())
@@ -220,8 +215,8 @@ def hero_ixnetwork_config():
     for ed, val in td.items():
         # Was Using #p.ENI_COUNT*2)/len(vports) for multiplier
 
-        obj_map[ed]["bgp"]   = ixnetwork.Topology.add(Ports=vports[:4] if ed=="enis" else vports[4:], Name="TG_%s" % ed)\
-                                        .DeviceGroup.add(Name="%s" % ed.upper(), Multiplier=4)\
+        obj_map[ed]["bgp"]   = ixnetwork.Topology.add(Ports=vports[:len(vports)//2] if ed=="enis" else vports[len(vports)//2:], Name="TG_%s" % ed)\
+                                        .DeviceGroup.add(Name="%s" % ed.upper(), Multiplier=(p.ENI_COUNT//2) // (len(vports)//2))\
                                         .Ethernet.add(UseVlans=True).Ipv4.add().BgpIpv4Peer.add()
 
         obj_map[ed]["ipv4"]             = obj_map[ed]["bgp"].parent
@@ -242,12 +237,12 @@ def hero_ixnetwork_config():
             obj_map[ed]["rangesd"].PrefixAddrStep.Single(val["rangesd"]["prefixaddrstep"])
 
     properties = [
-        ("eth", "Mac","mac", "start_value", "step_value", "increments", "ng_step"),
-        ("eth", "VlanId","vlanid", "start_value", "step_value", "increments", "ng_step"),
-        ("ipv4", "Address","ip", "start_value", "step_value", "increments", "ng_step"),
-        ("ipv4", "GatewayIp","gip", "start_value", "step_value", "increments", "ng_step"),
-        ("rangesa", "NetworkAddress","ip", "start_value", "step_value", "increments", "ng_step"),
-        ("rangesd", "NetworkAddress","ip", "start_value", "step_value", "increments", "ng_step")
+        ("eth", "Mac","mac", "start_value", "step_value", "increments"),#, "ng_step"),
+        ("eth", "VlanId","vlanid", "start_value", "step_value", "increments"),#, "ng_step"),
+        ("ipv4", "Address","ip", "start_value", "step_value", "increments"),#, "ng_step"),
+        ("ipv4", "GatewayIp","gip", "start_value", "step_value", "increments"),#, "ng_step"),
+        ("rangesa", "NetworkAddress","ip", "start_value", "step_value", "increments"),#, "ng_step"),
+        ("rangesd", "NetworkAddress","ip", "start_value", "step_value", "increments"),#, "ng_step")
 
     ]
     print ("*"*5,"Updating custom Patterns",datetime.now(),"*"*5)
@@ -261,12 +256,13 @@ def hero_ixnetwork_config():
                 obj = getattr(obj_map[ed][prop[0]],prop[1])
             tmp = val[prop[0]][prop[2]]
             obj.Custom(start_value=tmp[prop[3]], step_value=tmp[prop[4]], increments=tmp[prop[5]])
-            indx,value = 0, tmp[prop[6]]
-            if type(tmp[prop[6]]) is tuple:
-                indx, value = tmp[prop[6]]
+            obj.Steps.Enabled = False
+            #indx,value = 0, tmp[prop[6]]
+            #if type(tmp[prop[6]]) is tuple:
+            #    indx, value = tmp[prop[6]]
             
-            obj.Steps[indx].Enabled = True
-            obj.Steps[indx].Step = value
+            #obj.Steps[indx].Enabled = True
+            #obj.Steps[indx].Step = value
 
     print ("*"*5,"Finished Updating custom Patterns",datetime.now(),"*"*5)
     print("Create Traffic")
@@ -279,8 +275,8 @@ def hero_ixnetwork_config():
     step_ip_d = td['clients']["rangesd"]["multiplier"]
     select_port = 0
     reset_ip_count = 0
-    for eni in range(16):               # p.ENI_COUNT               Need to change when ixnwork is using 48 as 16 is used by ixload
-        if eni%4==0:                   # Was using int((p.ENI_COUNT*2)/len(vports))
+    for eni in range(number_of_enis_for_udb_traffic):               # p.ENI_COUNT               Need to change when ixnwork is using 48 as 16 is used by ixload
+        if eni % (p.ENI_COUNT//len(vports))==0:                   # Was using int((p.ENI_COUNT*2)/len(vports))
                 select_port+=1
                 reset_ip_count = 0
 
