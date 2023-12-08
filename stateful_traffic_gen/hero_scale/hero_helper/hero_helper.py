@@ -691,26 +691,8 @@ class HeroHelper:
     def _create_ip_ranges_info(self, connection, session_url, nsgs, enis, ip_ranges_per_vpc):
 
         ip_range_list = []
-        """
-        if self.eni_count == 8:
-            bg_client_ranges = self.ip_ranges_per_vpc
-            bg_server_ranges = 1
-            cps_client_ranges = self.ip_ranges_per_vpc
-            cps_server_ranges = 1
-        else:
-            bg_client_ranges = int(self.eni_count * self.ixl_network_percentage
-                                   * self.tcp_bg_adjust_percentage * self.ip_ranges_per_vpc)
-            bg_server_ranges = int(self.eni_count * self.ixl_network_percentage
-                                   * self.tcp_bg_adjust_percentage)
-
-            cps_client_ranges = int(self.eni_count * self.ixl_network_percentage * self.ip_ranges_per_vpc)\
-                                - bg_client_ranges
-            cps_server_ranges = int(self.eni_count* self.ixl_network_percentage) - bg_server_ranges
-        """
-
         IxLoadUtils.log("Adding IPv4 ranges session {}...".format(self.session_no))
         # Create Client and Server IP Ranges
-
         for _ in range(len(self.client_ip_range_settings)):
             self._create_ip_ranges(connection, session_url, "Traffic1@Network1", "IP-1")
         for _ in range(len(self.server_ip_range_settings)):
@@ -781,38 +763,46 @@ class HeroHelper:
         eni_index = 1
         ip_count = 0
         nodetype = "client"
-        bg_net_split = int(enis_adjusted * self.tcp_bg_adjust_percentage)
-        if enis_adjusted == 2:
-            # when ENI_COUNT = 8 then enis_adjusted = 2 so take half
-            bg_net_split = 1
+        nsg_range = ip_ranges_per_vpc // 2
+
         # Build Client IPs and MACs
         if self.split_networks is True and self.test_config_type == 'cps':
-            #enis_adjusted_cps = enis_adjusted - bg_net_split
             enis_adjusted_cps = enis_adjusted
 
             for i in range(nsgs_adjusted + ip_ranges_per_vpc):
-                if ip_count < ip_ranges_per_vpc-2 and eni_index <= enis_adjusted_cps:
-                    client_ip_range_settings.append(self._set_ip_range_options(ip_count, eni_index, nodetype))
-                    client_mac_range_settings.append(self._set_mac_range_options(ip_count, eni_index, nodetype))
+                if ip_count < nsg_range - 2 and eni_index <= enis_adjusted_cps:
+                    cps_ip_index = ip_count
+                    client_ip_range_settings.append(self._set_ip_range_options(cps_ip_index, eni_index, nodetype))
+                    client_mac_range_settings.append(self._set_mac_range_options(cps_ip_index, eni_index, nodetype))
                     client_vlan_range_settings.append(self._set_vlan_range_options(self.url_patch_dict, eni_index-1, nodetype))
                     ip_count += 1
                 else:
-                    eni_index += 1
-                    ip_count = 0
+                    if nsg_range == 5 and ip_count == 3:
+                        nsg_range = 10
+                        ip_count = 5
+                    elif nsg_range == 10 and ip_count == 8:
+                        nsg_range = 5
+                        eni_index += 1
+                        ip_count = 0
+
         elif self.split_networks is True and self.test_config_type == 'tcp_bg':
-            #eni_index = (enis_adjusted - bg_net_split) + 1
             eni_index = 1
-            ip_count = 8
+            ip_count = 3
 
             for i in range(nsgs_adjusted + ip_ranges_per_vpc):
-                if ip_count < ip_ranges_per_vpc and eni_index <= enis_adjusted:
+                if ip_count < nsg_range and eni_index <= enis_adjusted:
                     client_ip_range_settings.append(self._set_ip_range_options(ip_count, eni_index, nodetype))
                     client_mac_range_settings.append(self._set_mac_range_options(ip_count, eni_index, nodetype))
                     client_vlan_range_settings.append(self._set_vlan_range_options(self.url_patch_dict, eni_index-1, nodetype))
                     ip_count += 1
                 else:
-                    eni_index += 1
-                    ip_count = 8
+                    if nsg_range == 5 and ip_count == 5:
+                        nsg_range = 10
+                        ip_count = 8
+                    elif nsg_range == 10 and ip_count == 10:
+                        nsg_range = 5
+                        eni_index += 1
+                        ip_count = 3
         else:
             for i in range(nsgs_adjusted + ip_ranges_per_vpc + (enis_adjusted - 1)):
                 if ip_count < ip_ranges_per_vpc and eni_index <= enis_adjusted:
@@ -850,7 +840,6 @@ class HeroHelper:
 
         if self.split_networks is True and self.test_config_type == 'cps':
             eni = 1
-            #for i in range(enis - bg_net_split):
             for i in range(enis):
                 server_ip_range_settings.append(self._set_ip_range_options(0, eni, nodetype))
                 server_mac_range_settings.append(self._set_mac_range_options(0, eni, nodetype))
@@ -858,7 +847,6 @@ class HeroHelper:
                                                                                eni-1, nodetype))
                 eni += 1
         elif self.split_networks is True and self.test_config_type == 'tcp_bg':
-            #eni = enis - bg_net_split + 1
             eni = 1
             for i in range(enis):
                 server_ip_range_settings.append(self._set_ip_range_options(0, eni, nodetype))
@@ -1616,7 +1604,7 @@ class HeroHelper:
     def _save_rxf(self):
 
         IxLoadUtils.log("Saving rxf session {}".format(self.session_no))
-        file_path = "{}Hero_{}ENIs_{}{}_new.rxf".format(self.save_rxf_path, self.eni_count,
+        file_path = "{}Hero_{}ENIs_{}{}_new2.rxf".format(self.save_rxf_path, self.eni_count,
                                                    self.test_config_type, self.id)
         IxLoadUtils.saveRxf(self.connection, self.session_url, file_path)
 
