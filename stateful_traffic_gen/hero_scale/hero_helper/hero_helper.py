@@ -302,6 +302,7 @@ class HeroHelper:
             self.slot_total = self._adjust_to_port_settings()
 
             # adjust MAX_CPS stat to slot_total
+            self.slot_total = 8
             if self.split_networks is True:
                 self.url_patch_dict['MAX_CPS'] = int((self.slot_total-1) * 1000000 * 4.5)
             else:
@@ -321,7 +322,7 @@ class HeroHelper:
 
             self.url_patch_dict['base_url'] = self.base_url
 
-            ## build up config and save rxf but don't runit
+            # build up config and save rxf but don't runit
             self._build_config()
 
     def __del__(self):
@@ -377,6 +378,7 @@ class HeroHelper:
         if self.test_config_type == 'cps':
             IxLoadUtils.log("Adjusting Test Settings, TCP, HTTP session {}...".format(self.session_no))
             response = self._patch_test_setting(self.url_patch_dict, 'http_version')
+
         elif self.test_config_type == 'tcp_bg':
             IxLoadUtils.log("Adjusting Test Settings, TCP, HTTP session {}...".format(self.session_no))
             response = self._patch_test_setting(self.url_patch_dict, 'http_version_tcp_bg')
@@ -384,6 +386,8 @@ class HeroHelper:
             response = self._patch_test_setting(self.url_patch_dict, 'http_ssl_version')
             response = self._patch_test_setting(self.url_patch_dict, 'tcp_adjust_tcp_buffers')
 
+        response = self._patch_test_setting(self.url_patch_dict, 'client_disable_tcp_tw_recycle')
+        response = self._patch_test_setting(self.url_patch_dict, 'server_disable_tcp_tw_recycle')
         response = self._patch_test_setting(self.url_patch_dict, 'http_tcp_conns_per_user')
 
     def _remove_http_headers(self):
@@ -450,12 +454,6 @@ class HeroHelper:
         # client/server IP ranges created here
         enis_adjusted = int(self.enis * self.ixl_network_percentage)
         ip_ranges_adjusted = enis_adjusted * self.ip_ranges_per_vpc
-        ip_range_list = self._create_ip_ranges_info(self.connection, self.session_url, ip_ranges_adjusted,
-                                                    enis_adjusted, self.ip_ranges_per_vpc)
-        self.client_ip_range_names = ip_range_list[0]
-        self.client_range_list_info = ip_range_list[1]
-        self.server_ip_range_names = ip_range_list[2]
-        self.server_range_list_info = ip_range_list[3]
 
         # Create Client/Server Networks
         client_ipmacvlan_list = self._create_client_ipmacvlan(ip_ranges_adjusted, enis_adjusted, self.ip_ranges_per_vpc)
@@ -467,6 +465,19 @@ class HeroHelper:
         self.server_ip_range_settings = server_ipmacvlan_list[0]
         self.server_mac_range_settings = server_ipmacvlan_list[1]
         self.server_vlan_range_settings = server_ipmacvlan_list[2]
+
+        ip_range_list = self._create_ip_ranges_info(self.connection, self.session_url, ip_ranges_adjusted,
+                                                    enis_adjusted, self.ip_ranges_per_vpc)
+
+        self.client_ip_range_names = ip_range_list[0]
+        self.client_range_list_info = ip_range_list[1]
+        self.server_ip_range_names = ip_range_list[2]
+        self.server_range_list_info = ip_range_list[3]
+
+        self._update_client_ranges(self.client_ip_range_settings, self.client_mac_range_settings,
+                                   self.client_vlan_range_settings)
+        self._update_server_ranges(self.server_ip_range_settings, self.server_mac_range_settings,
+                                   self.server_vlan_range_settings)
 
         # Turn off unused IPs
         self._disable_unused_ips()
@@ -680,6 +691,7 @@ class HeroHelper:
     def _create_ip_ranges_info(self, connection, session_url, nsgs, enis, ip_ranges_per_vpc):
 
         ip_range_list = []
+        """
         if self.eni_count == 8:
             bg_client_ranges = self.ip_ranges_per_vpc
             bg_server_ranges = 1
@@ -694,28 +706,15 @@ class HeroHelper:
             cps_client_ranges = int(self.eni_count * self.ixl_network_percentage * self.ip_ranges_per_vpc)\
                                 - bg_client_ranges
             cps_server_ranges = int(self.eni_count* self.ixl_network_percentage) - bg_server_ranges
+        """
 
         IxLoadUtils.log("Adding IPv4 ranges session {}...".format(self.session_no))
         # Create Client and Server IP Ranges
-        if self.split_networks is True and self.test_config_type == 'cps':
-            for _ in range(cps_client_ranges):
-                self._create_ip_ranges(connection, session_url, "Traffic1@Network1", "IP-1")
-            for _ in range(cps_server_ranges):
-                self._create_ip_ranges(connection, session_url, "Traffic2@Network2", "IP-2")
 
-        elif self.split_networks is True and self.test_config_type == 'tcp_bg':
-            for _ in range(bg_client_ranges):
-                self._create_ip_ranges(connection, session_url, "Traffic1@Network1", "IP-1")
-            for _ in range(bg_server_ranges):
-                self._create_ip_ranges(connection, session_url, "Traffic2@Network2", "IP-2")
-        else:
-            self.ip_client_range_adjust = 0
-            self.ip_server_range_adjust = 0
-
-            for _ in range(nsgs - self.ip_client_range_adjust):
-                self._create_ip_ranges(connection, session_url, "Traffic1@Network1", "IP-1")
-            for _ in range(enis - self.ip_server_range_adjust):
-                self._create_ip_ranges(connection, session_url, "Traffic2@Network2", "IP-2")
+        for _ in range(len(self.client_ip_range_settings)):
+            self._create_ip_ranges(connection, session_url, "Traffic1@Network1", "IP-1")
+        for _ in range(len(self.server_ip_range_settings)):
+            self._create_ip_ranges(connection, session_url, "Traffic2@Network2", "IP-2")
 
         # Get Client/Server IP range info
         client_ip_range_names, client_range_list_info = self._get_ip_range_names(connection,
@@ -724,28 +723,13 @@ class HeroHelper:
                                 session_url, "Traffic2@Network2", "IP-2", self.url_patch_dict)
 
         IxLoadUtils.log("Disabling autoMacGeneration session {} ...".format(self.session_no))
-        if self.split_networks is True and self.test_config_type == 'cps':
-            for i in range(cps_client_ranges):
-                url_ip = self._get_url_ip("client", client_ip_range_names, i)
-                response = requests.patch(url_ip, json=self.url_patch_dict['auto_mac_setting'])
-            for i in range(cps_server_ranges):
-                url_ip = self._get_url_ip("server", server_ip_range_names, i)
-                response = requests.patch(url_ip, json=self.url_patch_dict['auto_mac_setting'])
-        elif self.split_networks is True and self.test_config_type == 'tcp_bg':
-            for i in range(bg_client_ranges):
-                url_ip = self._get_url_ip("client", client_ip_range_names, i)
-                response = requests.patch(url_ip, json=self.url_patch_dict['auto_mac_setting'])
-            for i in range(bg_server_ranges):
-                url_ip = self._get_url_ip("server", server_ip_range_names, i)
-                response = requests.patch(url_ip, json=self.url_patch_dict['auto_mac_setting'])
-        else:
-            for i in range(enis - self.ip_server_range_adjust):
-                url_ip = self._get_url_ip("server", server_ip_range_names, i)
-                response = requests.patch(url_ip, json=self.url_patch_dict['auto_mac_setting'])
 
-            for i in range(nsgs - self.ip_client_range_adjust):
-                url_ip = self._get_url_ip("client", client_ip_range_names, i)
-                response = requests.patch(url_ip, json=self.url_patch_dict['auto_mac_setting'])
+        for i in range(len(self.client_ip_range_settings)):
+            url_ip = self._get_url_ip("client", client_ip_range_names, i)
+            response = requests.patch(url_ip, json=self.url_patch_dict['auto_mac_setting'])
+        for i in range(len(self.server_ip_range_settings)):
+            url_ip = self._get_url_ip("server", server_ip_range_names, i)
+            response = requests.patch(url_ip, json=self.url_patch_dict['auto_mac_setting'])
 
         ip_range_list.append(client_ip_range_names)
         ip_range_list.append(client_range_list_info)
@@ -803,18 +787,11 @@ class HeroHelper:
             bg_net_split = 1
         # Build Client IPs and MACs
         if self.split_networks is True and self.test_config_type == 'cps':
-            enis_adjusted_cps = enis_adjusted - bg_net_split
-            range_adjust = 0
-            if self.eni_count == 64:
-                range_adjust = 1
-            elif self.eni_count == 128:
-                range_adjust = 37
-            elif self.eni_count == 256:
-                range_adjust = 37
-            for i in range(nsgs_adjusted + ip_ranges_per_vpc - (bg_net_split * self.ip_ranges_per_vpc)
-                           + range_adjust):
-                if ip_count < ip_ranges_per_vpc and eni_index <= enis_adjusted_cps:
-                # --- ixNet objects need to be added in the list before they are configured.
+            #enis_adjusted_cps = enis_adjusted - bg_net_split
+            enis_adjusted_cps = enis_adjusted
+
+            for i in range(nsgs_adjusted + ip_ranges_per_vpc):
+                if ip_count < ip_ranges_per_vpc-2 and eni_index <= enis_adjusted_cps:
                     client_ip_range_settings.append(self._set_ip_range_options(ip_count, eni_index, nodetype))
                     client_mac_range_settings.append(self._set_mac_range_options(ip_count, eni_index, nodetype))
                     client_vlan_range_settings.append(self._set_vlan_range_options(self.url_patch_dict, eni_index-1, nodetype))
@@ -823,32 +800,22 @@ class HeroHelper:
                     eni_index += 1
                     ip_count = 0
         elif self.split_networks is True and self.test_config_type == 'tcp_bg':
-            eni_index = (enis_adjusted - bg_net_split) + 1
-            range_adjust = 0
-            if self.eni_count == 32:
-                range_adjust = 1
-            elif self.eni_count == 48:
-                range_adjust = 2
-            elif self.eni_count == 64:
-                range_adjust = 3
-            elif self.eni_count == 128:
-                range_adjust = 15
-            elif self.eni_count == 256:
-                range_adjust = 15
-            for i in range(bg_net_split * ip_ranges_per_vpc + range_adjust):
+            #eni_index = (enis_adjusted - bg_net_split) + 1
+            eni_index = 1
+            ip_count = 8
+
+            for i in range(nsgs_adjusted + ip_ranges_per_vpc):
                 if ip_count < ip_ranges_per_vpc and eni_index <= enis_adjusted:
-                    # --- ixNet objects need to be added in the list before they are configured.
                     client_ip_range_settings.append(self._set_ip_range_options(ip_count, eni_index, nodetype))
                     client_mac_range_settings.append(self._set_mac_range_options(ip_count, eni_index, nodetype))
                     client_vlan_range_settings.append(self._set_vlan_range_options(self.url_patch_dict, eni_index-1, nodetype))
                     ip_count += 1
                 else:
                     eni_index += 1
-                    ip_count = 0
+                    ip_count = 8
         else:
             for i in range(nsgs_adjusted + ip_ranges_per_vpc + (enis_adjusted - 1)):
                 if ip_count < ip_ranges_per_vpc and eni_index <= enis_adjusted:
-                    # --- ixNet objects need to be added in the list before they are configured.
                     client_ip_range_settings.append(self._set_ip_range_options(ip_count, eni_index, nodetype))
                     client_mac_range_settings.append(self._set_mac_range_options(ip_count, eni_index, nodetype))
                     client_vlan_range_settings.append(self._set_vlan_range_options(self.url_patch_dict, eni_index-1, nodetype))
@@ -861,35 +828,6 @@ class HeroHelper:
                     else:
                         eni_index += 1
                     ip_count = 0
-
-        if self.split_networks is True:
-            if self.eni_count == 32 and self.test_config_type == 'tcp_bg':
-                nsgs_split = len(client_ip_range_settings) + 1
-            elif self.eni_count == 48:
-                nsgs_split = len(client_ip_range_settings) + 2
-            elif self.eni_count == 64:
-                nsgs_split = len(client_ip_range_settings) + 3
-            nsgs_split = len(client_ip_range_settings)
-        else:
-            nsgs_split = nsgs_adjusted
-
-        IxLoadUtils.log("Setting Client Ranges: IPs, MACs, VLANs sesion {}".format(self.session_no))
-        for i in range(nsgs_split):
-            '''
-            if self.split_networks is True and i >= len(client_ip_range_settings):
-                break
-            '''
-            range_url = self.url_patch_dict['client_range_setting']['url']
-            r_index = self.client_ip_range_names[i].split("-")[1][1:]
-
-            url_ip = self.url_patch_dict['base_url'] + range_url % (r_index)
-            url_mac = self.url_patch_dict['base_url'] + range_url % (r_index) + "/macRange"
-            url_vlan = self.url_patch_dict['base_url'] + range_url % (r_index) + "/vlanRange"
-
-            response = requests.patch(url_ip, json=client_ip_range_settings[i])
-            response = requests.patch(url_mac, json=client_mac_range_settings[i])
-            response = requests.patch(url_vlan, json=self.vlan_enabled)
-            response = requests.patch(url_vlan, json=client_vlan_range_settings[i])
 
         client_ipmacvlan_list.append(client_ip_range_settings)
         client_ipmacvlan_list.append(client_mac_range_settings)
@@ -912,15 +850,17 @@ class HeroHelper:
 
         if self.split_networks is True and self.test_config_type == 'cps':
             eni = 1
-            for i in range(enis - bg_net_split):
+            #for i in range(enis - bg_net_split):
+            for i in range(enis):
                 server_ip_range_settings.append(self._set_ip_range_options(0, eni, nodetype))
                 server_mac_range_settings.append(self._set_mac_range_options(0, eni, nodetype))
                 server_vlan_range_settings.append(self._set_vlan_range_options(self.url_patch_dict,
                                                                                eni-1, nodetype))
                 eni += 1
         elif self.split_networks is True and self.test_config_type == 'tcp_bg':
-            eni = enis - bg_net_split + 1
-            for i in range(bg_net_split):
+            #eni = enis - bg_net_split + 1
+            eni = 1
+            for i in range(enis):
                 server_ip_range_settings.append(self._set_ip_range_options(0, eni, nodetype))
                 server_mac_range_settings.append(self._set_mac_range_options(0, eni, nodetype))
                 server_vlan_range_settings.append(self._set_vlan_range_options(self.url_patch_dict,
@@ -938,21 +878,6 @@ class HeroHelper:
                     server_mac_range_settings.append(self._set_mac_range_options(0, eni+1, nodetype))
                     server_vlan_range_settings.append(self._set_vlan_range_options(self.url_patch_dict,
                                                                                    eni, nodetype))
-
-        IxLoadUtils.log("Setting Server Ranges: IPs, MACs, VLANs session {}".format(self.session_no))
-        for i in range(enis):
-            if i < len(server_ip_range_settings):
-                range_url = self.url_patch_dict['server_range_setting']['url']
-                r_index = self.server_ip_range_names[i].split("-")[1][1:]
-
-                url_ip = self.url_patch_dict['base_url'] + range_url % (r_index)
-                url_mac = self.url_patch_dict['base_url'] + range_url % (r_index) + "/macRange"
-                url_vlan = self.url_patch_dict['base_url'] + range_url % (r_index) + "/vlanRange"
-
-                response = requests.patch(url_ip, json=server_ip_range_settings[i])
-                response = requests.patch(url_mac, json=server_mac_range_settings[i])
-                response = requests.patch(url_vlan, json=self.vlan_enabled)
-                response = requests.patch(url_vlan, json=server_vlan_range_settings[i])
 
         server_ipmacvlan_list.append(server_ip_range_settings)
         server_ipmacvlan_list.append(server_mac_range_settings)
@@ -1691,13 +1616,13 @@ class HeroHelper:
     def _save_rxf(self):
 
         IxLoadUtils.log("Saving rxf session {}".format(self.session_no))
-        file_path = "{}Hero_{}ENIs_{}{}.rxf".format(self.save_rxf_path, self.eni_count,
+        file_path = "{}Hero_{}ENIs_{}{}_new.rxf".format(self.save_rxf_path, self.eni_count,
                                                    self.test_config_type, self.id)
         IxLoadUtils.saveRxf(self.connection, self.session_url, file_path)
 
     def _set_ip_range_options(self, ip_count, eni_index, nodetype):
 
-        client_host_count = self.url_patch_dict['ip_settings']['client']['host_count']
+        client_host_count = ACL_RULES_NSG * IP_PER_ACL_RULE * 2
         client_increment = self.url_patch_dict['ip_settings']['client']['increment_by']
         server_host_count = self.url_patch_dict['ip_settings']['server']['host_count']
         server_increment = self.url_patch_dict['ip_settings']['server']['increment_by']
@@ -1717,6 +1642,7 @@ class HeroHelper:
 
 
         return IpOptionsToChange
+
 
     def _set_mac_range_options(self, ip_count=0, eni_index=0, nodetype="client"):
 
@@ -1794,3 +1720,46 @@ class HeroHelper:
         vlan_settings = {'firstId': firstId, 'uniqueCount': uniqueCount}
 
         return vlan_settings
+
+    def _update_client_ranges(self, client_ip_range_settings, client_mac_range_settings,
+                              client_vlan_range_settings):
+
+        IxLoadUtils.log("Setting Client Ranges: IPs, MACs, VLANs sesion {}".format(self.session_no))
+        for i in range(len(client_ip_range_settings)):
+            '''
+            if self.split_networks is True and i >= len(client_ip_range_settings):
+                break
+            '''
+            range_url = self.url_patch_dict['client_range_setting']['url']
+            r_index = self.client_ip_range_names[i].split("-")[1][1:]
+
+            url_ip = self.url_patch_dict['base_url'] + range_url % (r_index)
+            url_mac = self.url_patch_dict['base_url'] + range_url % (r_index) + "/macRange"
+            url_vlan = self.url_patch_dict['base_url'] + range_url % (r_index) + "/vlanRange"
+
+            response = requests.patch(url_ip, json=client_ip_range_settings[i])
+            response = requests.patch(url_mac, json=client_mac_range_settings[i])
+            response = requests.patch(url_vlan, json=self.vlan_enabled)
+            response = requests.patch(url_vlan, json=client_vlan_range_settings[i])
+
+        return
+
+    def _update_server_ranges(self, server_ip_range_settings, server_mac_range_settings,
+                              server_vlan_range_settings):
+
+        IxLoadUtils.log("Setting Server Ranges: IPs, MACs, VLANs session {}".format(self.session_no))
+        for i in range(len(server_ip_range_settings)):
+            if i < len(server_ip_range_settings):
+                range_url = self.url_patch_dict['server_range_setting']['url']
+                r_index = self.server_ip_range_names[i].split("-")[1][1:]
+
+                url_ip = self.url_patch_dict['base_url'] + range_url % (r_index)
+                url_mac = self.url_patch_dict['base_url'] + range_url % (r_index) + "/macRange"
+                url_vlan = self.url_patch_dict['base_url'] + range_url % (r_index) + "/vlanRange"
+
+                response = requests.patch(url_ip, json=server_ip_range_settings[i])
+                response = requests.patch(url_mac, json=server_mac_range_settings[i])
+                response = requests.patch(url_vlan, json=self.vlan_enabled)
+                response = requests.patch(url_vlan, json=server_vlan_range_settings[i])
+
+        return
